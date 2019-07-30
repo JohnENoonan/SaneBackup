@@ -13,25 +13,19 @@ class Backup(QtWidgets.QWidget):
         self.backBtn.move(0,0)
         # init commit Window
         self.initCommitWindow()
-        # hbox = QtWidgets.QHBoxLayout()
-        # button = QtWidgets.QPushButton('Change Font', self)
-        # button.setFocusPolicy(QtCore.Qt.NoFocus)
-        # button.move(20, 20)
-        # self.connect(button, QtCore.SIGNAL('clicked()'), self.showDialog)
-        #
-        # self.label = QtWidgets.QLabel('This is some sample text', self)
-        # self.label.move(130, 20)
-        # hbox.addWidget(self.label, 1)
-
-
         self.setGeometry(500, 300, 400, 200)
         self.setWindowTitle('Sane Backup')
-        self.setLayout(self.mainBox)
-        self.mainBox.addWidget(self.commitWindow)
+        # self.setLayout(self.toggleLayout)
+        parentLayout = QtWidgets.QVBoxLayout()
+        self.setLayout(parentLayout)
+        parentLayout.addWidget(self.toggleWidget)
+        parentLayout.addStretch()
+        parentLayout.addWidget(self.commitWindow)
         self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
 
     def initMainWindow(self):
-        self.mainBox = QtWidgets.QHBoxLayout()
+        self.toggleLayout = QtWidgets.QHBoxLayout()
+        self.toggleWidget = QtWidgets.QWidget()
         # setup commit toggle
         self.commitBtn = QtWidgets.QPushButton("Save a Backup",self)
         self.commitBtn.setCheckable(True)
@@ -41,25 +35,35 @@ class Backup(QtWidgets.QWidget):
         self.loadBtn = QtWidgets.QPushButton("Load a Backup",self)
         self.loadBtn.setCheckable(True)
         self.connect(self.loadBtn, QtCore.SIGNAL('clicked()'), self.handleLoadToggle)
-        self.mainBox.addWidget(self.commitBtn)
-        self.mainBox.addWidget(self.loadBtn)
+        self.toggleLayout.addWidget(self.commitBtn)
+        self.toggleLayout.addWidget(self.loadBtn)
+        self.toggleWidget.setLayout(self.toggleLayout)
 
     def initCommitWindow(self):
         self.commitBox = QtWidgets.QVBoxLayout()
         self.commitWindow = QtWidgets.QWidget()
+        self.commitWindow.setMinimumHeight(400)
         self.commitWindow.setLayout(self.commitBox)
-        self.commitBox.addWidget(QtWidgets.QLabel("Commit baby!",self.commitWindow))
+        # self.commitBox.addWidget(QtWidgets.QLabel("Enter Commit Message",self.commitWindow))
+        self.commitMsg = QtWidgets.QTextEdit()
+        self.commitMsg.setPlaceholderText("Enter Commit Message")
+        self.commitMsg.setParent(self.commitWindow)
+        self.commitBox.addWidget(self.commitMsg)
+        okBtn = QtWidgets.QPushButton("Ok",self.commitWindow)
+        self.commitBox.addWidget(okBtn)
 
 
     def handleCommitToggle(self):
         print "clicked commit toggle"
         self.commitBtn.setChecked(True)
         self.loadBtn.setChecked(False)
+        self.commitWindow.setVisible(True)
 
     def handleLoadToggle(self):
         print "clicked load toggle"
         self.commitBtn.setChecked(False)
         self.loadBtn.setChecked(True)
+        self.commitWindow.setVisible(False)
 
 class MainWindow(QtWidgets.QWidget):
     def __init__(self):
