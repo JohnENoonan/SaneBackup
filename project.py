@@ -1,37 +1,75 @@
-import hou,os,sqlite3
+import hou
+import os, datetime, glob
+import csv
 from hutil.Qt import QtWidgets, QtCore
 
-proj = hou.getenv("JOB") + '/'
+proj = hou.getenv("JOB")
 backupDir = os.path.join(proj,"backup")
 
 class Backup():
     def __init__(self):
-        self.name = "backup.db"
+        self.name = "backup.csv"
+        self.filepath = os.path.join(backupDir,self.name)
         # check for database
         if self.name not in os.listdir(backupDir):
-            open(os.path.join(backupDir,self.name), 'a').close()
+            print "creted new table"
             self.initTable()
-
+            # self.initTable()
+            
     def saveBackup(self):
         hou.hipFile.save()
         hou.hipFile.saveAsBackup()
         # may need to catch hou.OperationFailed
+
+    # return the newest file in the backup directory
+    def getNewBackup(self):
+        print "get backup"
+        files = []
+        for ext in ('*.hip', '*.hiplc', '*.hipnc'):
+           files.extend(glob.glob(os.path.join(backupDir, ext)))
+        return max(files, key=os.path.getmtime)
 
     def makeCommit(self, msg):
         # get commit Message
         if len(msg) == 0:
             sendMsg("Error: backups must have a defining message.")
             return
-        conn = sqlite3.connect(self.name)
-        c = conn.cursor()
+        print "making commit: \"" + msg + "\""
+        self.saveBackup()
+        newfile = self.getNewBackup()
+        try:
+            ftime = os.path.getmtime(newfile)
+        except OSError:
+            print("Path '%s' does not exists or is inaccessible" %newfile)
+            sys.exit()
+        self.writeToFile([newfile,ftime,msg])
+        self.select_all_tasks()
 
+    def select_all_tasks(self):
+        with open(self.filepath, mode='r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            line_count = 0
+            for row in csv_reader:
+                if line_count == 0:
+                    print "Column names are {}".format(", ".join(row.reverse()))
+                    line_count += 1
+                print "{}: {} = \"{}\".".format(row["Filename"],row["Date"],row["Message"])
+                line_count += 1
+            print str(line_count-1) + " commits"
+
+
+    def writeToFile(self, data):
+        with open(self.filepath, mode='a') as backupfile:
+            writer = csv.writer(backupfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(data)
+
+    # create header
     def initTable(self):
-        conn = sqlite3.connect(db)
-        c = conn.cursor()
-        c.execute('''CREATE TABLE stocks
-                 (date text, trans text, symbol text, qty real, price real)''')
-        conn.commit()
-        conn.close()
+        with open(self.filepath, mode='a') as backupfile:
+            writer = csv.writer(backupfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(['Filename','Date','Message'])
+
+
 
 
 class Window(QtWidgets.QWidget):
