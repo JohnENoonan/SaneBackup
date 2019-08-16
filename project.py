@@ -80,7 +80,8 @@ class Backup():
             line_count = 0
             commits = []
             for row in csv_reader:
-                commits.append([datetime.fromtimestamp(float(row["Date"])),row["Message"]])
+                d = datetime.fromtimestamp(float(row["Date"])).strftime("%m/%d/%Y, %H:%M:%S")
+                commits.append([d,row["Message"]])
                 line_count += 1
             return commits
 
@@ -144,9 +145,11 @@ class Window(QtWidgets.QWidget):
         self.loadBox = QtWidgets.QVBoxLayout()
         self.loadWindow = QtWidgets.QWidget()
         self.loadWindow.setLayout(self.loadBox)
+        self.loadWindow.setMinimumHeight(400)
         self.loadTree = QtWidgets.QTreeWidget()
-        self.loadTree.setHeaderLabels(self.backup.getHeaders())
-
+        self.loadTree.setHeaderLabels(self.backup.getHeaders()[1:])
+        self.loadBox.addWidget(self.loadTree)
+        self.loadWindow.setVisible(False)
 
     def handleCommitToggle(self):
         print "clicked commit toggle"
@@ -165,9 +168,12 @@ class Window(QtWidgets.QWidget):
         commits = self.backup.getCommits()
         print commits
         # if there has been a commit since last checking
-        if (len(commits) != self.numCommits):
+        if (len(commits) > self.numCommits):
+            print "in if statement"
             for i in xrange(self.numCommits,len(commits)):
+                print commits[i]
                 el = QtWidgets.QTreeWidgetItem(self.loadTree,commits[i])
+            self.numCommits = len(commits)
 
 
 def sendMsg(text):
