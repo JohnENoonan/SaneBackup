@@ -1,11 +1,44 @@
-import hou
+import hou,os,sqlite3
 from hutil.Qt import QtWidgets, QtCore
 
 proj = hou.getenv("JOB") + '/'
+backupDir = os.path.join(proj,"backup")
 
-class Backup(QtWidgets.QWidget):
+class Backup():
+    def __init__(self):
+        self.name = "backup.db"
+        # check for database
+        if self.name not in os.listdir(backupDir):
+            open(os.path.join(backupDir,self.name), 'a').close()
+            self.initTable()
+
+    def saveBackup(self):
+        hou.hipFile.save()
+        hou.hipFile.saveAsBackup()
+        # may need to catch hou.OperationFailed
+
+    def makeCommit(self, msg):
+        # get commit Message
+        if len(msg) == 0:
+            sendMsg("Error: backups must have a defining message.")
+            return
+        conn = sqlite3.connect(self.name)
+        c = conn.cursor()
+
+    def initTable(self):
+        conn = sqlite3.connect(db)
+        c = conn.cursor()
+        c.execute('''CREATE TABLE stocks
+                 (date text, trans text, symbol text, qty real, price real)''')
+        conn.commit()
+        conn.close()
+
+
+class Window(QtWidgets.QWidget):
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
+        # create composite backup controller
+        self.backup = Backup()
         # init main window ui
         self.initMainWindow()
         self.backBtn = QtWidgets.QPushButton("Back")
@@ -15,7 +48,7 @@ class Backup(QtWidgets.QWidget):
         self.initCommitWindow()
         self.setGeometry(500, 300, 400, 200)
         self.setWindowTitle('Sane Backup')
-        # self.setLayout(self.toggleLayout)
+        # set layouts and add widgets
         parentLayout = QtWidgets.QVBoxLayout()
         self.setLayout(parentLayout)
         parentLayout.addWidget(self.toggleWidget)
@@ -39,19 +72,19 @@ class Backup(QtWidgets.QWidget):
         self.toggleLayout.addWidget(self.loadBtn)
         self.toggleWidget.setLayout(self.toggleLayout)
 
+    # setup text box for message and submit button
     def initCommitWindow(self):
         self.commitBox = QtWidgets.QVBoxLayout()
         self.commitWindow = QtWidgets.QWidget()
         self.commitWindow.setMinimumHeight(400)
         self.commitWindow.setLayout(self.commitBox)
-        # self.commitBox.addWidget(QtWidgets.QLabel("Enter Commit Message",self.commitWindow))
         self.commitMsg = QtWidgets.QTextEdit()
         self.commitMsg.setPlaceholderText("Enter Commit Message")
         self.commitMsg.setParent(self.commitWindow)
         self.commitBox.addWidget(self.commitMsg)
         okBtn = QtWidgets.QPushButton("Ok",self.commitWindow)
+        okBtn.clicked.connect(lambda: self.backup.makeCommit(self.commitMsg.toPlainText()))
         self.commitBox.addWidget(okBtn)
-
 
     def handleCommitToggle(self):
         print "clicked commit toggle"
@@ -65,62 +98,11 @@ class Backup(QtWidgets.QWidget):
         self.loadBtn.setChecked(True)
         self.commitWindow.setVisible(False)
 
-class MainWindow(QtWidgets.QWidget):
-    def __init__(self):
-        QtWidgets.QWidget.__init__(self)
 
-        self.layout=QtWidgets.QVBoxLayout()
-        self.setLayout(self.layout)
-
-
-        self.checkbox=QtWidgets.QCheckBox("Layouts")
-        self.layout.addWidget(self.checkbox)
-
-
-        self.widget1=QtWidgets.QWidget()
-        self.layout.addWidget(self.widget1)
-
-        self.layout1=QtWidgets.QVBoxLayout()
-        self.widget1.setLayout(self.layout1)
-
-        self.layout1.addWidget(QtWidgets.QLabel("First layout"))
-
-        self.layout1.addWidget(QtWidgets.QTextEdit())
-
-
-        self.widget2=QtWidgets.QWidget()
-        self.layout.addWidget(self.widget2)
-
-        self.layout2=QtWidgets.QHBoxLayout()
-        self.widget2.setLayout(self.layout2)
-
-        self.layout2.addWidget(QtWidgets.QTextEdit("Second layout"))
-
-        self.layout2.addWidget(QtWidgets.QTextEdit())
-
-
-        self.checkbox.toggled.connect(self.checkbox_toggled)
-        self.checkbox.toggle()
-
-        self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
-
-    def checkbox_toggled(self, state):
-        self.widget1.setVisible(state)
-        self.widget2.setVisible(not state)
-
-def createInterface():
-    widget = QtWidgets.QLabel("I'm a label")
-    widget.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
-    return widget
-
-def saveBackup():
-    hou.hipFile.save()
-    hou.hipFile.saveAsBackup()
-    # may need to catch hou.OperationFailed
+def sendMsg(text):
+    hou.ui.displayMessage(text)
 
 # execution of program called from shelf
 def main():
-    print proj
-    dialog = Backup()
-    dialog.show()
-    # createInterface().show()
+    gui = Window()
+    gui.show()
