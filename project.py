@@ -1,5 +1,6 @@
 import hou
-import os, datetime, glob
+import os, glob
+from datetime import datetime
 import csv
 from hutil.Qt import QtWidgets, QtCore
 
@@ -9,25 +10,27 @@ backupDir = os.path.join(proj,"backup")
 class Backup():
     def __init__(self):
         self.name = "backup.csv"
+        self.header = ['Filename','Date','Message']
         self.filepath = os.path.join(backupDir,self.name)
         # check for database
         if self.name not in os.listdir(backupDir):
             print "creted new table"
             self.initTable()
-            # self.initTable()
-            
+
     def saveBackup(self):
-        hou.hipFile.save()
-        hou.hipFile.saveAsBackup()
-        # may need to catch hou.OperationFailed
+        try:
+            hou.hipFile.save()
+            hou.hipFile.saveAsBackup()
+        except hou.OperationFailed:
+            sendMsg("Error: Houdini could not save backup")
+            sys.exit()
 
     # return the newest file in the backup directory
     def getNewBackup(self):
-        print "get backup"
-        files = []
-        for ext in ('*.hip', '*.hiplc', '*.hipnc'):
-           files.extend(glob.glob(os.path.join(backupDir, ext)))
-        return max(files, key=os.path.getmtime)
+        files = glob.glob(os.path.join(backupDir, "*.hip*").replace("\\","/"))
+        print files
+        assert(len(files) != 0)
+        return max(files, key=os.path.getmtime).replace("\\","/")
 
     def makeCommit(self, msg):
         # get commit Message
@@ -36,14 +39,14 @@ class Backup():
             return
         print "making commit: \"" + msg + "\""
         self.saveBackup()
-        newfile = self.getNewBackup()
         try:
+            newfile = self.getNewBackup()
             ftime = os.path.getmtime(newfile)
         except OSError:
             print("Path '%s' does not exists or is inaccessible" %newfile)
             sys.exit()
         self.writeToFile([newfile,ftime,msg])
-        self.select_all_tasks()
+        # self.select_all_tasks()
 
     def select_all_tasks(self):
         with open(self.filepath, mode='r') as csv_file:
@@ -57,19 +60,29 @@ class Backup():
                 line_count += 1
             print str(line_count-1) + " commits"
 
-
     def writeToFile(self, data):
-        with open(self.filepath, mode='a') as backupfile:
+        with open(self.filepath, mode='ab') as backupfile:
             writer = csv.writer(backupfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             writer.writerow(data)
 
     # create header
     def initTable(self):
-        with open(self.filepath, mode='a') as backupfile:
+        with open(self.filepath, mode='ab') as backupfile:
             writer = csv.writer(backupfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(['Filename','Date','Message'])
+            writer.writerow(self.header)
 
+    def getHeaders(self):
+        return self.header
 
+    def getCommits(self):
+        with open(self.filepath, mode='r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            line_count = 0
+            commits = []
+            for row in csv_reader:
+                commits.append([datetime.fromtimestamp(float(row["Date"])),row["Message"]])
+                line_count += 1
+            return commits
 
 
 class Window(QtWidgets.QWidget):
@@ -82,16 +95,19 @@ class Window(QtWidgets.QWidget):
         self.backBtn = QtWidgets.QPushButton("Back")
         self.backBtn.resize(self.backBtn.minimumSizeHint())
         self.backBtn.move(0,0)
-        # init commit Window
+        # init Windows
         self.initCommitWindow()
+        self.initLoadWindow()
         self.setGeometry(500, 300, 400, 200)
         self.setWindowTitle('Sane Backup')
         # set layouts and add widgets
+        self.numCommits = 0
         parentLayout = QtWidgets.QVBoxLayout()
         self.setLayout(parentLayout)
         parentLayout.addWidget(self.toggleWidget)
         parentLayout.addStretch()
         parentLayout.addWidget(self.commitWindow)
+        parentLayout.addWidget(self.loadWindow)
         self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
 
     def initMainWindow(self):
@@ -124,17 +140,34 @@ class Window(QtWidgets.QWidget):
         okBtn.clicked.connect(lambda: self.backup.makeCommit(self.commitMsg.toPlainText()))
         self.commitBox.addWidget(okBtn)
 
+    def initLoadWindow(self):
+        self.loadBox = QtWidgets.QVBoxLayout()
+        self.loadWindow = QtWidgets.QWidget()
+        self.loadWindow.setLayout(self.loadBox)
+        self.loadTree = QtWidgets.QTreeWidget()
+        self.loadTree.setHeaderLabels(self.backup.getHeaders())
+
+
     def handleCommitToggle(self):
         print "clicked commit toggle"
         self.commitBtn.setChecked(True)
         self.loadBtn.setChecked(False)
         self.commitWindow.setVisible(True)
+        self.loadWindow.setVisible(False)
 
     def handleLoadToggle(self):
         print "clicked load toggle"
         self.commitBtn.setChecked(False)
         self.loadBtn.setChecked(True)
         self.commitWindow.setVisible(False)
+        self.loadWindow.setVisible(True)
+        # add commits to tree
+        commits = self.backup.getCommits()
+        print commits
+        # if there has been a commit since last checking
+        if (len(commits) != self.numCommits):
+            for i in xrange(self.numCommits,len(commits)):
+                el = QtWidgets.QTreeWidgetItem(self.loadTree,commits[i])
 
 
 def sendMsg(text):
