@@ -16,6 +16,7 @@ class Backup():
         if self.name not in os.listdir(backupDir):
             self.initTable()
 
+    # save a backup file
     def saveBackup(self):
         try:
             hou.hipFile.save()
@@ -27,11 +28,10 @@ class Backup():
 
     # load a backup file and save it as current one
     def loadBackup(self, index):
-        #TODO need to not let people switch if they have uncommited changes
         if hou.hipFile.hasUnsavedChanges():
-            sendMsg("Current file has unsaved changes. Save file and create a commit")
+            sendMsg("Current file has unsaved changes. " + \
+                    "Save file and create a commit before switching version.")
             return
-        #TODO maybe spawn a pop up they need to check to make sure they mean to switch
         masterFile = hou.hipFile.path() # what the file should be saved as
         fname = self.getBackupFilename(index)
         try:
@@ -41,6 +41,7 @@ class Backup():
             sendMsg(e)
             sys.exit()
 
+    # get the filename of a backup based on the index in the commit log
     def getBackupFilename(self,index):
         with open(self.filepath, mode='r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -73,6 +74,7 @@ class Backup():
         self.writeToFile([newfile,ftime,msg])
         return True
 
+    # debugging function to print out tasks
     def select_all_tasks(self):
         with open(self.filepath, mode='r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -85,20 +87,23 @@ class Backup():
                 line_count += 1
             print str(line_count-1) + " commits"
 
+    # write a commit to the csv file
     def writeToFile(self, data):
         with open(self.filepath, mode='ab') as backupfile:
             writer = csv.writer(backupfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             writer.writerow(data)
 
-    # create header
+    # create csv file to manage backups
     def initTable(self):
         with open(self.filepath, mode='ab') as backupfile:
             writer = csv.writer(backupfile, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             writer.writerow(self.header)
 
+    # return headers of csv
     def getHeaders(self):
         return self.header
 
+    # return list of commits in form [date,message]
     def getCommits(self):
         with open(self.filepath, mode='r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
@@ -136,9 +141,7 @@ class Window(QtWidgets.QWidget):
 
     # on changed tab selection display either commit mode or load mode
     def handleTabSelect(self, index):
-        if index == 0: # commit tab
-            self.handleCommitToggle()
-        elif index == 1: # load tab
+        if index == 1: # load tab
             self.handleLoadToggle()
 
     # setup text box for message and submit button
@@ -176,6 +179,7 @@ class Window(QtWidgets.QWidget):
         if self.backup.makeCommit(self.commitMsg.toPlainText()):
             self.commitMsg.clear()
 
+    # load a backup if user is certain
     def loadBackup(self):
         popup = QtWidgets.QMessageBox.question(self,"Continue?",
                 "If there current scene is not committed it will be lost." + \
@@ -190,13 +194,11 @@ class Window(QtWidgets.QWidget):
         else:
             pass
 
-    def handleCommitToggle(self):
-        pass
-
+    # set up commit messages to display
     def handleLoadToggle(self):
         # add commits to tree
         commits = self.backup.getCommits()
-        # if there has been a commit since last checking
+        # if there has been a commit since last checking update list
         if (len(commits) > self.numCommits):
             for i in xrange(self.numCommits,len(commits)):
                 el = QtWidgets.QTreeWidgetItem(self.loadTree,commits[i])
