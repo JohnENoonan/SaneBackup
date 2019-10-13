@@ -21,9 +21,34 @@ class Backup():
         try:
             hou.hipFile.save()
             hou.hipFile.saveAsBackup()
-        except hou.OperationFailed:
-            sendMsg("Error: Houdini could not save backup")
+            sendMsg("Backup successfully created")
+        except hou.OperationFailed as e:
+            sendMsg(e)
             sys.exit()
+
+    # load a backup file and save it as current one
+    def loadBackup(self, index):
+        masterFile = hou.hipFile.path()
+        fname = self.getBackupFilename(index)
+        print "filename = " + fname
+        try:
+            hou.hipFile.load(fname)
+            hou.hipFile.save(masterFile)
+        except (hou.OperationFailed, hou.LoadWarning) as e:
+            sendMsg(e)
+            sys.exit()
+        print fname
+
+    def getBackupFilename(self,index):
+        print "get filename for index = ", str(index)
+        with open(self.filepath, mode='r') as csv_file:
+            csv_reader = csv.DictReader(csv_file)
+            line_count = 0
+            for row in csv_reader:
+                if line_count == index:
+                    print "found correct file: " + row["Filename"]
+                    return row["Filename"]
+                line_count += 1
 
     # return the newest file in the backup directory
     def getNewBackup(self):
@@ -136,21 +161,31 @@ class Window(QtWidgets.QWidget):
         self.loadWindow = QtWidgets.QWidget()
         self.loadWindow.setLayout(self.loadBox)
         self.loadWindow.setMinimumHeight(400)
+        # create tree with date and message
         self.loadTree = QtWidgets.QTreeWidget()
         self.loadTree.setHeaderLabels(self.backup.getHeaders()[1:])
         self.loadBox.addWidget(self.loadTree)
+        # add load button
+        loadBtn = QtWidgets.QPushButton("Load Selected Backup",self.loadWindow)
+        loadBtn.clicked.connect(self.loadBackup)
+        self.loadBox.addWidget(loadBtn)
+        # loadBtn.clicked.connect(lambda:)
         self.loadWindow.setVisible(False)
 
+    def loadBackup(self):
+        getSelected = self.loadTree.selectedItems()
+        if getSelected:
+            index = self.loadTree.indexFromItem(getSelected[0]).row()
+            self.backup.loadBackup(index)
+
     def handleCommitToggle(self):
-        print "clicked commit toggle"
+        pass
 
     def handleLoadToggle(self):
-        print "clicked load toggle"
         # add commits to tree
         commits = self.backup.getCommits()
         # if there has been a commit since last checking
         if (len(commits) > self.numCommits):
-            print "in if statement"
             for i in xrange(self.numCommits,len(commits)):
                 el = QtWidgets.QTreeWidgetItem(self.loadTree,commits[i])
             self.numCommits = len(commits)
