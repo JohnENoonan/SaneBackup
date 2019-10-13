@@ -4,8 +4,8 @@ from datetime import datetime
 import csv
 from hutil.Qt import QtWidgets, QtCore
 
-proj = hou.getenv("JOB")
-backupDir = os.path.join(proj,"backup")
+proj = hou.getenv("JOB") # path to project file
+backupDir = os.path.join(proj,"backup") # path to backup directory
 
 class Backup():
     def __init__(self):
@@ -32,6 +32,7 @@ class Backup():
         assert(len(files) != 0)
         return max(files, key=os.path.getmtime).replace("\\","/")
 
+    # make a commit with given message
     def makeCommit(self, msg):
         # get commit Message
         if len(msg) == 0:
@@ -43,7 +44,7 @@ class Backup():
             newfile = self.getNewBackup()
             ftime = os.path.getmtime(newfile)
         except OSError:
-            print("Path '%s' does not exists or is inaccessible" %newfile)
+            print("Path '%s' does not exists or is inaccessible" % newfile)
             sys.exit()
         self.writeToFile([newfile,ftime,msg])
         # self.select_all_tasks()
@@ -91,11 +92,6 @@ class Window(QtWidgets.QWidget):
         QtWidgets.QWidget.__init__(self, parent)
         # create composite backup controller
         self.backup = Backup()
-        # init main window ui
-        self.initMainWindow()
-        self.backBtn = QtWidgets.QPushButton("Back")
-        self.backBtn.resize(self.backBtn.minimumSizeHint())
-        self.backBtn.move(0,0)
         # init Windows
         self.initCommitWindow()
         self.initLoadWindow()
@@ -105,27 +101,21 @@ class Window(QtWidgets.QWidget):
         self.numCommits = 0
         parentLayout = QtWidgets.QVBoxLayout()
         self.setLayout(parentLayout)
-        parentLayout.addWidget(self.toggleWidget)
-        parentLayout.addStretch()
-        parentLayout.addWidget(self.commitWindow)
-        parentLayout.addWidget(self.loadWindow)
+        # create tabs
+        tabWidget = QtWidgets.QTabWidget()
+        tabWidget.addTab(self.commitWindow,"Make a Commit")
+        tabWidget.addTab(self.loadWindow,"Load a Backup")
+        # listen for tab change
+        tabWidget.currentChanged.connect(self.handleTabSelect)
+        parentLayout.addWidget(tabWidget)
         self.setParent(hou.ui.mainQtWindow(), QtCore.Qt.Window)
 
-    def initMainWindow(self):
-        self.toggleLayout = QtWidgets.QHBoxLayout()
-        self.toggleWidget = QtWidgets.QWidget()
-        # setup commit toggle
-        self.commitBtn = QtWidgets.QPushButton("Save a Backup",self)
-        self.commitBtn.setCheckable(True)
-        self.connect(self.commitBtn, QtCore.SIGNAL('clicked()'), self.handleCommitToggle)
-        self.commitBtn.setChecked(True)
-        # setup load toggle
-        self.loadBtn = QtWidgets.QPushButton("Load a Backup",self)
-        self.loadBtn.setCheckable(True)
-        self.connect(self.loadBtn, QtCore.SIGNAL('clicked()'), self.handleLoadToggle)
-        self.toggleLayout.addWidget(self.commitBtn)
-        self.toggleLayout.addWidget(self.loadBtn)
-        self.toggleWidget.setLayout(self.toggleLayout)
+    # on changed tab selection display either commit mode or load mode
+    def handleTabSelect(self, index):
+        if index == 0: # commit tab
+            self.handleCommitToggle()
+        elif index == 1: # load tab
+            self.handleLoadToggle()
 
     # setup text box for message and submit button
     def initCommitWindow(self):
@@ -153,29 +143,19 @@ class Window(QtWidgets.QWidget):
 
     def handleCommitToggle(self):
         print "clicked commit toggle"
-        self.commitBtn.setChecked(True)
-        self.loadBtn.setChecked(False)
-        self.commitWindow.setVisible(True)
-        self.loadWindow.setVisible(False)
 
     def handleLoadToggle(self):
         print "clicked load toggle"
-        self.commitBtn.setChecked(False)
-        self.loadBtn.setChecked(True)
-        self.commitWindow.setVisible(False)
-        self.loadWindow.setVisible(True)
         # add commits to tree
         commits = self.backup.getCommits()
-        print commits
         # if there has been a commit since last checking
         if (len(commits) > self.numCommits):
             print "in if statement"
             for i in xrange(self.numCommits,len(commits)):
-                print commits[i]
                 el = QtWidgets.QTreeWidgetItem(self.loadTree,commits[i])
             self.numCommits = len(commits)
 
-
+# display a message of supplied text
 def sendMsg(text):
     hou.ui.displayMessage(text)
 
