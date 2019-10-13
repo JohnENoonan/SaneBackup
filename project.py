@@ -14,7 +14,6 @@ class Backup():
         self.filepath = os.path.join(backupDir,self.name)
         # check for database
         if self.name not in os.listdir(backupDir):
-            print "creted new table"
             self.initTable()
 
     def saveBackup(self):
@@ -28,51 +27,51 @@ class Backup():
 
     # load a backup file and save it as current one
     def loadBackup(self, index):
-        masterFile = hou.hipFile.path()
+        #TODO need to not let people switch if they have uncommited changes
+        if hou.hipFile.hasUnsavedChanges():
+            sendMsg("Current file has unsaved changes. Save file and create a commit")
+            return
+        #TODO maybe spawn a pop up they need to check to make sure they mean to switch
+        masterFile = hou.hipFile.path() # what the file should be saved as
         fname = self.getBackupFilename(index)
-        print "filename = " + fname
         try:
             hou.hipFile.load(fname)
             hou.hipFile.save(masterFile)
         except (hou.OperationFailed, hou.LoadWarning) as e:
             sendMsg(e)
             sys.exit()
-        print fname
 
     def getBackupFilename(self,index):
-        print "get filename for index = ", str(index)
         with open(self.filepath, mode='r') as csv_file:
             csv_reader = csv.DictReader(csv_file)
             line_count = 0
             for row in csv_reader:
                 if line_count == index:
-                    print "found correct file: " + row["Filename"]
                     return row["Filename"]
                 line_count += 1
 
     # return the newest file in the backup directory
     def getNewBackup(self):
         files = glob.glob(os.path.join(backupDir, "*.hip*").replace("\\","/"))
-        print files
         assert(len(files) != 0)
         return max(files, key=os.path.getmtime).replace("\\","/")
 
     # make a commit with given message
+    # return true if commit successfully made
     def makeCommit(self, msg):
         # get commit Message
         if len(msg) == 0:
             sendMsg("Error: backups must have a defining message.")
-            return
-        print "making commit: \"" + msg + "\""
+            return False
         self.saveBackup()
         try:
             newfile = self.getNewBackup()
             ftime = os.path.getmtime(newfile)
         except OSError:
             print("Path '%s' does not exists or is inaccessible" % newfile)
-            sys.exit()
+            return False
         self.writeToFile([newfile,ftime,msg])
-        # self.select_all_tasks()
+        return True
 
     def select_all_tasks(self):
         with open(self.filepath, mode='r') as csv_file:
@@ -152,8 +151,8 @@ class Window(QtWidgets.QWidget):
         self.commitMsg.setPlaceholderText("Enter Commit Message")
         self.commitMsg.setParent(self.commitWindow)
         self.commitBox.addWidget(self.commitMsg)
-        okBtn = QtWidgets.QPushButton("Ok",self.commitWindow)
-        okBtn.clicked.connect(lambda: self.backup.makeCommit(self.commitMsg.toPlainText()))
+        okBtn = QtWidgets.QPushButton("Make Commit",self.commitWindow)
+        okBtn.clicked.connect(self.createCommit)
         self.commitBox.addWidget(okBtn)
 
     def initLoadWindow(self):
@@ -172,11 +171,24 @@ class Window(QtWidgets.QWidget):
         # loadBtn.clicked.connect(lambda:)
         self.loadWindow.setVisible(False)
 
+    # pass on information to backup class and mae a commit
+    def createCommit(self):
+        if self.backup.makeCommit(self.commitMsg.toPlainText()):
+            self.commitMsg.clear()
+
     def loadBackup(self):
-        getSelected = self.loadTree.selectedItems()
-        if getSelected:
-            index = self.loadTree.indexFromItem(getSelected[0]).row()
-            self.backup.loadBackup(index)
+        popup = QtWidgets.QMessageBox.question(self,"Continue?",
+                "If there current scene is not committed it will be lost." + \
+                " Are you sure you are ready to switch versions?",
+                QtWidgets.QMessageBox.Ok, QtWidgets.QMessageBox.Cancel)
+
+        if popup == QtWidgets.QMessageBox.Ok:
+            getSelected = self.loadTree.selectedItems()
+            if getSelected:
+                index = self.loadTree.indexFromItem(getSelected[0]).row()
+                self.backup.loadBackup(index)
+        else:
+            pass
 
     def handleCommitToggle(self):
         pass
